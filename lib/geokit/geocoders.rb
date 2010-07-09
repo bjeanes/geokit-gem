@@ -642,13 +642,36 @@ module Geokit
     class MultiGeocoder < Geocoder       
 
       private
+      
+      # This is taken from http://github.com/bluemonk/ipaddress/blob/master/lib/ipaddress/ipbase.rb
+      # TODO: Make GeoKit use the ipaddress gem to get these support functions
+      def self.valid_ipv4?(addr)
+        if /\A(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\Z/ =~ addr
+          return $~.captures.all? {|i| i.to_i < 256}
+        end
+        false
+      end
+      
+      def self.valid_ipv6?(addr)
+        # IPv6 (normal)
+        return true if /\A[\dA-Fa-f]{1,4}(:[\dA-Fa-f]{1,4})*\Z/ =~ addr
+        return true if /\A[\dA-Fa-f]{1,4}(:[\dA-Fa-f]{1,4})*::([\dA-Fa-f]{1,4}(:[\dA-Fa-f]{1,4})*)?\Z/ =~ addr
+        return true if /\A::([\dA-Fa-f]{1,4}(:[\dA-Fa-f]{1,4})*)?\Z/ =~ addr
+        # IPv6 (IPv4 compat)
+        return true if /\A[\dA-Fa-f]{1,4}(:[\dA-Fa-f]{1,4})*:/ =~ addr && valid_ipv4?($')
+        return true if /\A[\dA-Fa-f]{1,4}(:[\dA-Fa-f]{1,4})*::([\dA-Fa-f]{1,4}(:[\dA-Fa-f]{1,4})*:)?/ =~ addr && valid_ipv4?($')
+        return true if /\A::([\dA-Fa-f]{1,4}(:[\dA-Fa-f]{1,4})*:)?/ =~ addr && valid_ipv4?($')
+        false
+      end
+      
       # This method will call one or more geocoders in the order specified in the 
       # configuration until one of the geocoders work.
       # 
       # The failover approach is crucial for production-grade apps, but is rarely used.
       # 98% of your geocoding calls will be successful with the first call  
       def self.do_geocode(address, options = {})
-        geocode_ip = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/.match(address)
+        geocode_ip = valid_ipv4?(address) || valid_ipv6?(address)
+        
         provider_order = geocode_ip ? Geokit::Geocoders::ip_provider_order : Geokit::Geocoders::provider_order
         
         provider_order.each do |provider|
